@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.3.3 — From The Grill split into separate Sizzling (SZ) and Grill (G) options since item codes differ -->
 <!-- v1.3.2 — add-on chips tidied into a uniform responsive grid (equal-width centered tiles) instead of ragged wrap -->
 <!-- v1.3.1 — grill item codes confirmed: SZ02/G03 Grainfed Ribeye (sizzling/grill), SZ03/G04 Grainfed Sirloin (sizzling/grill); replaced TBC entries -->
 <!-- v1.3.0 — per-order edit: pencil button loads order text into an edit box, Update writes back to Firestore (handles free-text orders too) -->
@@ -142,10 +143,14 @@ const MENU = {
       ["SF02", "Grilled Salmon"],
     ]},
     { group: "From The Grill", items: [
-      ["SZ01 / G01", "Tenderloin Steak 220gm (SZ01 Sizzling / G01 Grill)"],
-      ["SZ02 / G03", "Grainfed Ribeye Steak (SZ02 Sizzling / G03 Grill)"],
-      ["SZ03 / G04", "Grainfed Sirloin Steak 220gm (SZ03 Sizzling / G04 Grill)"],
-      ["SZ04 / G05", "New Zealand Lamb Chop 350gm (SZ04 Sizzling / G05 Grill)"],
+      ["SZ01", "Tenderloin Steak 220gm (Sizzling)"],
+      ["G01", "Tenderloin Steak 220gm (Grill)"],
+      ["SZ02", "Grainfed Ribeye Steak (Sizzling)"],
+      ["G03", "Grainfed Ribeye Steak (Grill)"],
+      ["SZ03", "Grainfed Sirloin Steak 220gm (Sizzling)"],
+      ["G04", "Grainfed Sirloin Steak 220gm (Grill)"],
+      ["SZ04", "New Zealand Lamb Chop 350gm (Sizzling)"],
+      ["G05", "New Zealand Lamb Chop 350gm (Grill)"],
     ]},
     { group: "All Time Favourite", items: [
       ["PL03", "Hainanese Chicken Chop"],
