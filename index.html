@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.3.1 — grill item codes confirmed: SZ02/G03 Grainfed Ribeye (sizzling/grill), SZ03/G04 Grainfed Sirloin (sizzling/grill); replaced TBC entries -->
 <!-- v1.3.0 — per-order edit: pencil button loads order text into an edit box, Update writes back to Firestore (handles free-text orders too) -->
 <!-- v1.2.0 — Firebase Firestore sync (project ofl-league-tracker, collection hkhmOrders): shared live order list across all devices, realtime onSnapshot, delete syncs too; localStorage removed -->
 <!-- v1.1.0 — added Save Order (localStorage) with numbered order list below, per-order delete, Copy All Orders for restaurant, add-on chips (AD01–AD15) appended to main course line -->
@@ -140,9 +141,9 @@ const MENU = {
     ]},
     { group: "From The Grill", items: [
       ["SZ01 / G01", "Tenderloin Steak 220gm (SZ01 Sizzling / G01 Grill)"],
+      ["SZ02 / G03", "Grainfed Ribeye Steak (SZ02 Sizzling / G03 Grill)"],
+      ["SZ03 / G04", "Grainfed Sirloin Steak 220gm (SZ03 Sizzling / G04 Grill)"],
       ["SZ04 / G05", "New Zealand Lamb Chop 350gm (SZ04 Sizzling / G05 Grill)"],
-      ["", "Grainfed Sirloin Steak 220gm (item code TBC)"],
-      ["", "Grainfed Ribeye Steak (item code TBC)"],
     ]},
     { group: "All Time Favourite", items: [
       ["PL03", "Hainanese Chicken Chop"],
