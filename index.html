@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.2.0 — Firebase Firestore sync (project ofl-league-tracker, collection hkhmOrders): shared live order list across all devices, realtime onSnapshot, delete syncs too; localStorage removed -->
+<!-- v1.1.0 — added Save Order (localStorage) with numbered order list below, per-order delete, Copy All Orders for restaurant, add-on chips (AD01–AD15) appended to main course line -->
+<!-- v1.0.0 — HKHM Appreciation Lunch order form: pick from Coliseum menu, auto-generates the group format message, one-tap copy -->
+<title>HKHM Appreciation Lunch — Order Form</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #f4f1ea; color: #2b2b2b; padding: 16px; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 20px; }
+  header h1 { font-size: 22px; color: #7a1f1f; }
+  header p { font-size: 13px; color: #666; margin-top: 4px; }
+  .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+  label:first-child { margin-top: 0; }
+  input[type=text], select, textarea {
+    width: 100%; padding: 11px 12px; font-size: 15px; border: 1px solid #ccc; border-radius: 8px;
+    background: #fff; -webkit-appearance: none; appearance: none;
+  }
+  select { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"><path d="M1 1l5 5 5-5" stroke="%23666" stroke-width="2" fill="none"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; padding-right: 34px; }
+  textarea { resize: vertical; min-height: 44px; }
+  .hint { font-size: 12px; color: #888; margin-top: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { position: relative; }
+  .chip input { position: absolute; opacity: 0; }
+  .chip span {
+    display: inline-block; padding: 7px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 999px;
+    background: #fafafa; cursor: pointer; user-select: none;
+  }
+  .chip input:checked + span { background: #7a1f1f; color: #fff; border-color: #7a1f1f; }
+  button {
+    width: 100%; padding: 14px; font-size: 16px; font-weight: 700; border: none; border-radius: 10px;
+    background: #7a1f1f; color: #fff; cursor: pointer; margin-top: 16px;
+  }
+  button:active { transform: scale(.98); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.copied { background: #2e7d32; }
+  button.secondary { background: #fff; color: #7a1f1f; border: 2px solid #7a1f1f; }
+  #preview {
+    white-space: pre-wrap; font-family: "Courier New", monospace; font-size: 14px;
+    background: #f8f6f0; border: 1px dashed #c9b99a; border-radius: 8px; padding: 14px; min-height: 100px; color: #444;
+  }
+  .preview-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #7a1f1f; margin-bottom: 8px; }
+  .sync { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .sync.live { background: #e8f5e9; color: #2e7d32; }
+  .sync.off { background: #fdecea; color: #b71c1c; }
+  .sync.wait { background: #fff8e1; color: #b26a00; }
+  .order-item { border-bottom: 1px solid #eee; padding: 12px 0; position: relative; }
+  .order-item:last-child { border-bottom: none; }
+  .order-item pre { white-space: pre-wrap; font-family: "Courier New", monospace; font-size: 13.5px; color: #333; padding-right: 36px; }
+  .order-num { font-weight: 700; color: #7a1f1f; }
+  .del {
+    position: absolute; top: 12px; right: 0; width: 28px; height: 28px; border: none; border-radius: 6px;
+    background: #fdecea; color: #b71c1c; font-size: 15px; cursor: pointer; margin: 0; padding: 0; line-height: 1;
+  }
+  .count-badge { display: inline-block; background: #7a1f1f; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 13px; margin-left: 6px; vertical-align: middle; }
+  .empty { color: #999; font-size: 14px; font-style: italic; padding: 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🍽️ HKHM Appreciation Lunch</h1>
+    <p>Coliseum Café &amp; Restaurant, Mid Valley — please submit your order by today</p>
+  </header>
+
+  <div class="card">
+    <label for="name">Name</label>
+    <input type="text" id="name" placeholder="e.g. Brennen" autocomplete="name">
+
+    <label for="main">Main Course</label>
+    <select id="main"></select>
+
+    <label>Add-ons (optional)</label>
+    <div class="chips" id="addons"></div>
+
+    <label for="dessert">Dessert</label>
+    <select id="dessert"></select>
+
+    <label for="beverage">Beverage</label>
+    <select id="beverage"></select>
+
+    <label for="notes">Notes (optional)</label>
+    <textarea id="notes" placeholder="e.g. Sizzling, medium well, garlic &amp; brown sauce, no spicy"></textarea>
+    <div class="hint">Notes will be added as an extra line in the order.</div>
+
+    <button id="saveBtn">💾 Save Order</button>
+    <button id="copyBtn" class="secondary">📋 Copy This Order Message</button>
+  </div>
+
+  <div class="card">
+    <div class="preview-title">Preview — this order</div>
+    <div id="preview"></div>
+  </div>
+
+  <div class="card">
+    <div class="preview-title">Saved Orders <span class="count-badge" id="count">0</span><span class="sync wait" id="sync">connecting…</span></div>
+    <div id="orderList"><div class="empty">Connecting to sync…</div></div>
+    <button id="copyAllBtn">📤 Copy All Orders (for restaurant)</button>
+  </div>
+</div>
+
+<script>
+const MENU = {
+  main: [
+    { group: "Slow Cooked", items: [
+      ["RB01", "48H Sous Vide Australian Short Ribs"],
+      ["RB02", "48H Sous Vide Australian Beef Back Ribs"],
+      ["LM01", "Braised Lamb Shank (500gm)"],
+      ["RD03", "Denver Lamb Ribs (500–600gm)"],
+    ]},
+    { group: "Seafood", items: [
+      ["SF02", "Grilled Salmon"],
+    ]},
+    { group: "From The Grill", items: [
+      ["SZ01 / G01", "Tenderloin Steak 220gm (SZ01 Sizzling / G01 Grill)"],
+      ["SZ04 / G05", "New Zealand Lamb Chop 350gm (SZ04 Sizzling / G05 Grill)"],
+      ["", "Grainfed Sirloin Steak 220gm (item code TBC)"],
+      ["", "Grainfed Ribeye Steak (item code TBC)"],
+    ]},
+    { group: "All Time Favourite", items: [
+      ["PL03", "Hainanese Chicken Chop"],
+      ["PL04", "Grill Black Pepper Chicken"],
+      ["SZ05", "Sizzling Chicken Chop"],
+      ["PL01", "Chicken Cordon Bleu"],
+      ["PL06", "Roasted Chicken Leg"],
+      ["PL02", "Chicken Maryland"],
+    ]},
+    { group: "Burgers", items: [
+      ["WB01", "Aus Wagyu Beef Burger"],
+      ["T01", "Gourmet Beef Burger"],
+      ["T11", "Lamb Burger"],
+      ["T12", "Gourmet Chicken Burger"],
+      ["T10", "Crispy Chicken Burger"],
+    ]},
+    { group: "Local Favourites", items: [
+      ["L02", "Coliseum Fried Rice"],
+      ["L01", "Cili Padi Seafood Fried Rice"],
+      ["L03", "Sambal Fried Rice"],
+      ["L04", "Hainanese Fried Mee"],
+      ["L04.1", "Hainanese Fried Bee Hoon"],
+      ["L05", "Fried Mee Mamak"],
+    ]},
+    { group: "Pasta", items: [
+      ["P01", "Spaghetti Chicken Bolognese"],
+      ["P02", "Spaghetti Beef Bolognese"],
+    ]},
+    { group: "Vegetarian", items: [
+      ["V01", "Hainanese Fried Mee"],
+      ["V01.1", "Hainanese Fried Bee Hoon"],
+      ["P03", "Spaghetti Aglio Olio"],
+      ["V02", "Fried Rice"],
+      ["V03", "Spring Roll"],
+    ]},
+    { group: "Snacks & Sandwiches", items: [
+      ["SN07", "Fried Chicken Wings (1/2 dozen)"],
+      ["SN05", "Fried Chicken Fingers"],
+      ["SN06", "Fried Fish Fingers"],
+      ["SN04", "Onion Rings"],
+      ["T03", "Ciabatta Chicken Sandwich"],
+    ]},
+  ],
+  dessert: [
+    { group: "Desserts", items: [
+      ["D01", "Caramel Custard Pudding"],
+      ["D07", "Fried Ice Cream"],
+      ["D08", "Ice Cream (Single Scoop)"],
+      ["D09", "Ice Cream (Double Scoop)"],
+      ["D11", "All Slice Cake (Red Velvet / Cheese / Butter / Chocolate / Carrot)"],
+      ["D12", "Burnt Cheese Cake"],
+    ]},
+  ],
+  beverage: [
+    { group: "Soft Drink (Bottomless)", items: [
+      ["BC01", "Coca Cola (Bottomless)"],
+      ["BC02", "Sprite (Bottomless)"],
+      ["BC07", "Ice Lemon Tea (Bottomless)"],
+      ["BC10", "Soda Water (Bottomless)"],
+    ]},
+    { group: "Water", items: [
+      ["BC08", "Drinking Water (Dasani)"],
+      ["BC09", "Plain Water"],
+    ]},
+  ],
+  addons: [
+    ["AD01", "Chicken Sausage"],
+    ["AD03", "Fried Egg"],
+    ["AD04", "Beef Slice"],
+    ["AD05", "White Rice"],
+    ["AD06", "Butter Portion"],
+    ["AD07", "Mashed Potato"],
+    ["AD08", "Grilled Tomato"],
+    ["AD09", "Additional Sauce"],
+    ["AD10", "French Fries"],
+    ["AD11", "Fried Potato Wedges"],
+    ["AD12", "Hainanese Bread Loaf"],
+    ["AD13", "Hainanese Bread Slice"],
+    ["AD14", "Kaya in Bottle"],
+    ["AD15", "Soft Roll"],
+  ],
+};
+
+const $ = id => document.getElementById(id);
+
+function fillSelect(id, groups, placeholder) {
+  const sel = $(id);
+  sel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = ""; ph.textContent = placeholder;
+  sel.appendChild(ph);
+  groups.forEach(g => {
+    const og = document.createElement("optgroup");
+    og.label = g.group;
+    g.items.forEach(([code, name]) => {
+      const o = document.createElement("option");
+      o.value = code ? code + " – " + name : name;
+      o.textContent = (code ? code + " – " : "") + name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+
+fillSelect("main", MENU.main, "— Select main course —");
+fillSelect("dessert", MENU.dessert, "— Select dessert —");
+fillSelect("beverage", MENU.beverage, "— Select beverage —");
+
+MENU.addons.forEach(([code, name]) => {
+  const lab = document.createElement("label");
+  lab.className = "chip";
+  lab.innerHTML = '<input type="checkbox" value="' + code + ' – ' + name + '"><span>' + code + " " + name + "</span>";
+  $("addons").appendChild(lab);
+});
+
+function selectedAddons() {
+  return [...document.querySelectorAll("#addons input:checked")].map(i => i.value);
+}
+
+function buildMessage() {
+  const addons = selectedAddons();
+  const mainLine = ($("main").value || "______") + (addons.length ? " + " + addons.join(" + ") : "");
+  const lines = [
+    "Name: " + ($("name").value.trim() || "______"),
+    "Main Course: " + mainLine,
+    "Dessert: " + ($("dessert").value || "______"),
+    "Beverage: " + ($("beverage").value || "______"),
+  ];
+  const notes = $("notes").value.trim();
+  if (notes) lines.push("Notes: " + notes);
+  return lines.join("\n");
+}
+
+function render() { $("preview").textContent = buildMessage(); }
+["name","main","dessert","beverage","notes"].forEach(id => $(id).addEventListener("input", render));
+$("addons").addEventListener("change", render);
+render();
+
+firebase.initializeApp({
+  apiKey: "AIzaSyBHnS8LDfEpB68cktxMhwCNUuBcI8VXtaQ",
+  authDomain: "ofl-league-tracker.firebaseapp.com",
+  projectId: "ofl-league-tracker",
+  storageBucket: "ofl-league-tracker.firebasestorage.app",
+  messagingSenderId: "854506865712",
+  appId: "1:854506865712:web:b3a2139620a57e91bb19f5",
+});
+const db = firebase.firestore();
+const col = db.collection("hkhmOrders");
+
+let orders = [];
+let syncLive = false;
+
+function setSync(state) {
+  const el = $("sync");
+  el.className = "sync " + state;
+  el.textContent = state === "live" ? "sync LIVE" : state === "off" ? "sync OFF" : "connecting…";
+}
+
+function renderList() {
+  $("count").textContent = orders.length;
+  const box = $("orderList");
+  box.innerHTML = "";
+  if (!orders.length) {
+    box.innerHTML = '<div class="empty">No orders saved yet.</div>';
+    return;
+  }
+  orders.forEach((o, i) => {
+    const div = document.createElement("div");
+    div.className = "order-item";
+    const pre = document.createElement("pre");
+    const num = document.createElement("span");
+    num.className = "order-num";
+    num.textContent = (i + 1) + ". ";
+    pre.appendChild(num);
+    pre.appendChild(document.createTextNode(o.text));
+    const del = document.createElement("button");
+    del.className = "del";
+    del.title = "Delete order";
+    del.textContent = "✕";
+    del.addEventListener("click", async () => {
+      if (!confirm("Delete order #" + (i + 1) + "?")) return;
+      try {
+        await col.doc(o.id).delete();
+      } catch (e) {
+        alert("Delete failed: " + e.message);
+      }
+    });
+    div.appendChild(pre);
+    div.appendChild(del);
+    box.appendChild(div);
+  });
+}
+
+col.orderBy("createdAt").onSnapshot(snap => {
+  syncLive = true;
+  setSync("live");
+  orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderList();
+}, err => {
+  syncLive = false;
+  setSync("off");
+  $("orderList").innerHTML = '<div class="empty">Sync unavailable (' + err.code + '). Copy your order message and paste it in the group instead.</div>';
+});
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+
+function flash(btn, msg) {
+  const old = btn.textContent;
+  btn.textContent = msg;
+  btn.classList.add("copied");
+  setTimeout(() => { btn.textContent = old; btn.classList.remove("copied"); }, 2500);
+}
+
+$("saveBtn").addEventListener("click", async () => {
+  if (!$("name").value.trim()) { alert("Please enter a name first."); return; }
+  if (!syncLive) { alert("Sync is OFF — use Copy This Order Message and paste it in the group instead."); return; }
+  const btn = $("saveBtn");
+  btn.disabled = true;
+  try {
+    await col.add({
+      name: $("name").value.trim(),
+      text: buildMessage(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    ["name","notes"].forEach(id => { $(id).value = ""; });
+    ["main","dessert","beverage"].forEach(id => { $(id).selectedIndex = 0; });
+    document.querySelectorAll("#addons input:checked").forEach(i => { i.checked = false; });
+    render();
+    flash(btn, "✅ Saved & synced!");
+  } catch (e) {
+    alert("Save failed: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("copyBtn").addEventListener("click", async () => {
+  await copyText(buildMessage());
+  flash($("copyBtn"), "✅ Copied! Paste into the WhatsApp group");
+});
+
+$("copyAllBtn").addEventListener("click", async () => {
+  if (!orders.length) { alert("No orders saved yet."); return; }
+  const all = orders.map((o, i) => (i + 1) + ". " + o.text.split("\n").join("\n   ")).join("\n\n");
+  await copyText(all);
+  flash($("copyAllBtn"), "✅ Copied " + orders.length + " orders!");
+});
+</script>
+</body>
+</html>
