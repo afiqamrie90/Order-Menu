@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.3.2 — add-on chips tidied into a uniform responsive grid (equal-width centered tiles) instead of ragged wrap -->
 <!-- v1.3.1 — grill item codes confirmed: SZ02/G03 Grainfed Ribeye (sizzling/grill), SZ03/G04 Grainfed Sirloin (sizzling/grill); replaced TBC entries -->
 <!-- v1.3.0 — per-order edit: pencil button loads order text into an edit box, Update writes back to Firestore (handles free-text orders too) -->
 <!-- v1.2.0 — Firebase Firestore sync (project ofl-league-tracker, collection hkhmOrders): shared live order list across all devices, realtime onSnapshot, delete syncs too; localStorage removed -->
@@ -28,12 +29,13 @@
   select { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"><path d="M1 1l5 5 5-5" stroke="%23666" stroke-width="2" fill="none"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; padding-right: 34px; }
   textarea { resize: vertical; min-height: 44px; }
   .hint { font-size: 12px; color: #888; margin-top: 4px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { position: relative; }
+  .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .chip { position: relative; margin: 0; display: block; }
   .chip input { position: absolute; opacity: 0; }
   .chip span {
-    display: inline-block; padding: 7px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 999px;
-    background: #fafafa; cursor: pointer; user-select: none;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    width: 100%; height: 100%; min-height: 38px; padding: 6px 8px; font-size: 12px;
+    border: 1px solid #ccc; border-radius: 10px; background: #fafafa; cursor: pointer; user-select: none;
   }
   .chip input:checked + span { background: #7a1f1f; color: #fff; border-color: #7a1f1f; }
   button {
