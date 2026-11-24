@@ -305,7 +305,7 @@ function ensureOption(sel, value) {
   o.value = value;
   o.textContent = value + " (current)";
   o.dataset.current = "1";
-  sel.insertBefore(o, sel.options[1] || null);
+  sel.insertBefore(o, sel.firstElementChild ? sel.firstElementChild.nextSibling : null);
 }
 
 function clearCurrentOptions() {
