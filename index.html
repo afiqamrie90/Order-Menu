@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.3.0 — per-order edit: pencil button loads order text into an edit box, Update writes back to Firestore (handles free-text orders too) -->
 <!-- v1.2.0 — Firebase Firestore sync (project ofl-league-tracker, collection hkhmOrders): shared live order list across all devices, realtime onSnapshot, delete syncs too; localStorage removed -->
 <!-- v1.1.0 — added Save Order (localStorage) with numbered order list below, per-order delete, Copy All Orders for restaurant, add-on chips (AD01–AD15) appended to main course line -->
 <!-- v1.0.0 — HKHM Appreciation Lunch order form: pick from Coliseum menu, auto-generates the group format message, one-tap copy -->
@@ -59,6 +60,17 @@
     position: absolute; top: 12px; right: 0; width: 28px; height: 28px; border: none; border-radius: 6px;
     background: #fdecea; color: #b71c1c; font-size: 15px; cursor: pointer; margin: 0; padding: 0; line-height: 1;
   }
+  .edit {
+    position: absolute; top: 12px; right: 34px; width: 28px; height: 28px; border: none; border-radius: 6px;
+    background: #fff8e1; color: #b26a00; font-size: 14px; cursor: pointer; margin: 0; padding: 0; line-height: 1;
+  }
+  .order-item pre { padding-right: 70px; }
+  #editPanel { display: none; background: #fff8e1; border: 1px solid #e6c86e; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  #editPanel.open { display: block; }
+  #editPanel textarea { min-height: 110px; font-family: "Courier New", monospace; font-size: 13.5px; }
+  #editPanel .row { display: flex; gap: 8px; }
+  #editPanel button { margin-top: 8px; padding: 10px; font-size: 14px; }
+  #editCancel { background: #fff; color: #666; border: 1px solid #ccc; }
   .count-badge { display: inline-block; background: #7a1f1f; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 13px; margin-left: 6px; vertical-align: middle; }
   .empty { color: #999; font-size: 14px; font-style: italic; padding: 8px 0; }
 </style>
@@ -101,6 +113,14 @@
 
   <div class="card">
     <div class="preview-title">Saved Orders <span class="count-badge" id="count">0</span><span class="sync wait" id="sync">connecting…</span></div>
+    <div id="editPanel">
+      <div class="preview-title" id="editTitle">Editing order</div>
+      <textarea id="editBox"></textarea>
+      <div class="row">
+        <button id="editSave">💾 Update Order</button>
+        <button id="editCancel">Cancel</button>
+      </div>
+    </div>
     <div id="orderList"><div class="empty">Connecting to sync…</div></div>
     <button id="copyAllBtn">📤 Copy All Orders (for restaurant)</button>
   </div>
@@ -274,6 +294,28 @@ const col = db.collection("hkhmOrders");
 
 let orders = [];
 let syncLive = false;
+let editingId = null;
+
+function closeEdit() {
+  editingId = null;
+  $("editPanel").classList.remove("open");
+}
+
+$("editCancel").addEventListener("click", closeEdit);
+
+$("editSave").addEventListener("click", async () => {
+  if (!editingId) return;
+  const text = $("editBox").value.trim();
+  if (!text) { alert("Order text cannot be empty."); return; }
+  const nameLine = text.split("\n").find(l => l.toLowerCase().startsWith("name:"));
+  const name = nameLine ? nameLine.replace(/^name:\s*/i, "").trim() : "";
+  try {
+    await col.doc(editingId).update({ text, name });
+    closeEdit();
+  } catch (e) {
+    alert("Update failed: " + e.message);
+  }
+});
 
 function setSync(state) {
   const el = $("sync");
@@ -310,7 +352,19 @@ function renderList() {
         alert("Delete failed: " + e.message);
       }
     });
+    const edit = document.createElement("button");
+    edit.className = "edit";
+    edit.title = "Edit order";
+    edit.textContent = "✎";
+    edit.addEventListener("click", () => {
+      editingId = o.id;
+      $("editTitle").textContent = "Editing order #" + (i + 1) + " — " + o.name;
+      $("editBox").value = o.text;
+      $("editPanel").classList.add("open");
+      $("editPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
     div.appendChild(pre);
+    div.appendChild(edit);
     div.appendChild(del);
     box.appendChild(div);
   });
