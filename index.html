@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.4.0 — edit now loads the order back into the form dropdowns (unmatched saved values appear as "(current)" options so nothing is lost); free-text edit box removed -->
 <!-- v1.3.3 — From The Grill split into separate Sizzling (SZ) and Grill (G) options since item codes differ -->
 <!-- v1.3.2 — add-on chips tidied into a uniform responsive grid (equal-width centered tiles) instead of ragged wrap -->
 <!-- v1.3.1 — grill item codes confirmed: SZ02/G03 Grainfed Ribeye (sizzling/grill), SZ03/G04 Grainfed Sirloin (sizzling/grill); replaced TBC entries -->
@@ -69,12 +70,13 @@
     background: #fff8e1; color: #b26a00; font-size: 14px; cursor: pointer; margin: 0; padding: 0; line-height: 1;
   }
   .order-item pre { padding-right: 70px; }
-  #editPanel { display: none; background: #fff8e1; border: 1px solid #e6c86e; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-  #editPanel.open { display: block; }
-  #editPanel textarea { min-height: 110px; font-family: "Courier New", monospace; font-size: 13.5px; }
-  #editPanel .row { display: flex; gap: 8px; }
-  #editPanel button { margin-top: 8px; padding: 10px; font-size: 14px; }
-  #editCancel { background: #fff; color: #666; border: 1px solid #ccc; }
+  #editBanner {
+    display: none; background: #fff8e1; border: 1px solid #e6c86e; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 14px; font-size: 13px; font-weight: 700; color: #b26a00;
+    align-items: center; justify-content: space-between; gap: 10px;
+  }
+  #editBanner.open { display: flex; }
+  #editBanner button { width: auto; margin: 0; padding: 6px 12px; font-size: 12px; background: #fff; color: #666; border: 1px solid #ccc; }
   .count-badge { display: inline-block; background: #7a1f1f; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 13px; margin-left: 6px; vertical-align: middle; }
   .empty { color: #999; font-size: 14px; font-style: italic; padding: 8px 0; }
 </style>
@@ -87,6 +89,7 @@
   </header>
 
   <div class="card">
+    <div id="editBanner"><span id="editBannerText"></span><button id="editCancelBtn" type="button">Cancel edit</button></div>
     <label for="name">Name</label>
     <input type="text" id="name" placeholder="e.g. Brennen" autocomplete="name">
 
@@ -117,14 +120,6 @@
 
   <div class="card">
     <div class="preview-title">Saved Orders <span class="count-badge" id="count">0</span><span class="sync wait" id="sync">connecting…</span></div>
-    <div id="editPanel">
-      <div class="preview-title" id="editTitle">Editing order</div>
-      <textarea id="editBox"></textarea>
-      <div class="row">
-        <button id="editSave">💾 Update Order</button>
-        <button id="editCancel">Cancel</button>
-      </div>
-    </div>
     <div id="orderList"><div class="empty">Connecting to sync…</div></div>
     <button id="copyAllBtn">📤 Copy All Orders (for restaurant)</button>
   </div>
@@ -304,26 +299,68 @@ let orders = [];
 let syncLive = false;
 let editingId = null;
 
-function closeEdit() {
-  editingId = null;
-  $("editPanel").classList.remove("open");
+function ensureOption(sel, value) {
+  if (!value || [...sel.options].some(o => o.value === value)) return;
+  const o = document.createElement("option");
+  o.value = value;
+  o.textContent = value + " (current)";
+  o.dataset.current = "1";
+  sel.insertBefore(o, sel.options[1] || null);
 }
 
-$("editCancel").addEventListener("click", closeEdit);
+function clearCurrentOptions() {
+  document.querySelectorAll("select option[data-current]").forEach(o => o.remove());
+}
 
-$("editSave").addEventListener("click", async () => {
-  if (!editingId) return;
-  const text = $("editBox").value.trim();
-  if (!text) { alert("Order text cannot be empty."); return; }
-  const nameLine = text.split("\n").find(l => l.toLowerCase().startsWith("name:"));
-  const name = nameLine ? nameLine.replace(/^name:\s*/i, "").trim() : "";
-  try {
-    await col.doc(editingId).update({ text, name });
-    closeEdit();
-  } catch (e) {
-    alert("Update failed: " + e.message);
-  }
-});
+function resetForm() {
+  clearCurrentOptions();
+  ["name","notes"].forEach(id => { $(id).value = ""; });
+  ["main","dessert","beverage"].forEach(id => { $(id).selectedIndex = 0; });
+  document.querySelectorAll("#addons input:checked").forEach(i => { i.checked = false; });
+  render();
+}
+
+function exitEdit() {
+  editingId = null;
+  $("saveBtn").textContent = "💾 Save Order";
+  $("editBanner").classList.remove("open");
+  resetForm();
+}
+
+function startEdit(o, num) {
+  editingId = o.id;
+  clearCurrentOptions();
+  const lines = o.text.split("\n");
+  const get = pre => {
+    const l = lines.find(x => x.toLowerCase().startsWith(pre));
+    return l ? l.slice(pre.length).trim() : "";
+  };
+  $("name").value = get("name:");
+  const parts = get("main course:").split(" + ").map(s => s.trim()).filter(Boolean);
+  ensureOption($("main"), parts[0]);
+  $("main").value = parts[0] || "";
+  const chips = [...document.querySelectorAll("#addons input")];
+  chips.forEach(i => { i.checked = parts.slice(1).includes(i.value); });
+  const extra = parts.slice(1).filter(p => !chips.some(i => i.value === p));
+  const dVal = get("dessert:");
+  ensureOption($("dessert"), dVal);
+  $("dessert").value = dVal;
+  const bVal = get("beverage:");
+  ensureOption($("beverage"), bVal);
+  $("beverage").value = bVal;
+  const noteBits = [];
+  const n = get("notes:");
+  if (n) noteBits.push(n);
+  noteBits.push(...extra);
+  $("notes").value = noteBits.join(" | ");
+  $("saveBtn").textContent = "💾 Update Order #" + num;
+  $("editBannerText").textContent = "Editing order #" + num + " — " + o.name;
+  $("editBanner").classList.add("open");
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+$("editCancelBtn").addEventListener("click", exitEdit);
 
 function setSync(state) {
   const el = $("sync");
@@ -364,13 +401,7 @@ function renderList() {
     edit.className = "edit";
     edit.title = "Edit order";
     edit.textContent = "✎";
-    edit.addEventListener("click", () => {
-      editingId = o.id;
-      $("editTitle").textContent = "Editing order #" + (i + 1) + " — " + o.name;
-      $("editBox").value = o.text;
-      $("editPanel").classList.add("open");
-      $("editPanel").scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    edit.addEventListener("click", () => startEdit(o, i + 1));
     div.appendChild(pre);
     div.appendChild(edit);
     div.appendChild(del);
@@ -415,16 +446,19 @@ $("saveBtn").addEventListener("click", async () => {
   const btn = $("saveBtn");
   btn.disabled = true;
   try {
-    await col.add({
-      name: $("name").value.trim(),
-      text: buildMessage(),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    ["name","notes"].forEach(id => { $(id).value = ""; });
-    ["main","dessert","beverage"].forEach(id => { $(id).selectedIndex = 0; });
-    document.querySelectorAll("#addons input:checked").forEach(i => { i.checked = false; });
-    render();
-    flash(btn, "✅ Saved & synced!");
+    if (editingId) {
+      await col.doc(editingId).update({ text: buildMessage(), name: $("name").value.trim() });
+      exitEdit();
+      flash(btn, "✅ Updated & synced!");
+    } else {
+      await col.add({
+        name: $("name").value.trim(),
+        text: buildMessage(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      resetForm();
+      flash(btn, "✅ Saved & synced!");
+    }
   } catch (e) {
     alert("Save failed: " + e.message);
   } finally {
